@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Split Game with Progress Bar</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f0f0f0;
+            flex-direction: column;
+        }
+        #grid {
+            display: grid;
+            width: 100vw;
+            height: 100vh;
+            gap: 5px;
+        }
+        button {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            font-size: 2vw;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        input[type="file"] {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+        }
+        .progress-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0%;
+            height: 5px;
+            background-color: red;
+            transition: width 0.1s;
+        }
+    </style>
+</head>
+<body>
+
+    <input type="file" id="audioFile" accept="audio/*" />
+    <div id="grid"></div>
+
+    <script>
+        const grid = document.getElementById('grid');
+        let audioContext, source, buffer, currentButton, progressInterval;
+        const partDuration = 3; // Set the part duration to 3 seconds
+        
+        document.getElementById('audioFile').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(ev) {
+                const arrayBuffer = ev.target.result;
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                audioContext.decodeAudioData(arrayBuffer, function(decodedBuffer) {
+                    buffer = decodedBuffer;
+
+                    // Calculate the total number of 3-second parts
+                    const totalParts = Math.floor(buffer.duration / partDuration);
+
+                    // Clear the grid for a new audio file
+                    grid.innerHTML = '';
+
+                    // Determine how many columns and rows are needed
+                    const cols = Math.ceil(Math.sqrt(totalParts)); // Get enough columns to fit all buttons
+                    const rows = Math.ceil(totalParts / cols); // Calculate rows based on the number of columns
+
+                    // Set the grid template dynamically based on the number of parts
+                    grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+                    grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+
+                    // Create a button for each 3-second part
+                    for (let i = 0; i < totalParts; i++) {
+                        const button = document.createElement('button');
+                        button.textContent = `Part ${i + 1}`;
+                        const progressBar = document.createElement('div');
+                        progressBar.classList.add('progress-bar');
+                        button.appendChild(progressBar);
+
+                        button.onclick = () => playPart(i, partDuration, progressBar, button);
+                        grid.appendChild(button);
+                    }
+                });
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        function playPart(index, partDuration, progressBar, button) {
+            if (source) {
+                source.stop(); // Stop the previous sound
+                clearInterval(progressInterval); // Clear any ongoing progress bar updates
+                if (currentButton) {
+                    currentButton.querySelector('.progress-bar').style.width = '0%'; // Reset progress bar of the previous button
+                }
+            }
+
+            source = audioContext.createBufferSource();
+            source.buffer = buffer;
+
+            const startTime = index * partDuration;
+            source.start(0, startTime, partDuration); // Play the specific 3-second part
+
+            source.connect(audioContext.destination);
+
+            // Set the current button to track its progress bar
+            currentButton = button;
+
+            let progress = 0;
+            const updateInterval = 100; // Update progress bar every 100ms
+
+            progressInterval = setInterval(() => {
+                progress += updateInterval;
+                const progressPercentage = Math.min((progress / (partDuration * 1000)) * 100, 100);
+                progressBar.style.width = `${progressPercentage}%`;
+
+                if (progressPercentage >= 100) {
+                    clearInterval(progressInterval);
+                    progressBar.style.width = '0%'; // Reset the progress bar after it finishes
+                }
+            }, updateInterval);
+        }
+    </script>
+
+</body>
+</html>
